@@ -87,7 +87,7 @@ export default function App() {
           setLoading(false);
         }
       };
-      
+
       signIn();
       return () => unsubscribe();
     } catch (initError) {
@@ -128,7 +128,7 @@ export default function App() {
   }
 
   const renderContent = () => {
-    switch(view) {
+    switch (view) {
       case 'chooseRole':
         return <ChooseRole setView={setView} />;
       case 'studentForm':
@@ -184,19 +184,19 @@ function Header({ toggleTheme, theme, onLogout, showLogout }) {
 // --- Choose Role Component ---
 function ChooseRole({ setView }) {
   return (
-    <div className={${tailwind.container} max-w-lg text-center animate-fade-in}>
+    <div className={`${tailwind.container} max-w-lg text-center animate-fade-in`}>
       <h1 className={tailwind.heading}>Welcome</h1>
       <p className="text-slate-600 dark:text-slate-400 mb-8 text-lg">Please select your role to proceed.</p>
       <div className="flex flex-col md:flex-row gap-6">
         <button
           onClick={() => setView('studentForm')}
-          className={${tailwind.button} bg-indigo-600 hover:bg-indigo-700 md:w-1/2 shadow-xl}
+          className={`${tailwind.button} bg-indigo-600 hover:bg-indigo-700 md:w-1/2 shadow-xl`}
         >
           Submit a Complaint
         </button>
         <button
           onClick={() => setView('studentDashboard')}
-          className={${tailwind.button} bg-purple-600 hover:bg-purple-700 md:w-1/2 shadow-xl}
+          className={`${tailwind.button} bg-purple-600 hover:bg-purple-700 md:w-1/2 shadow-xl`}
         >
           Track My Complaints
         </button>
@@ -252,7 +252,7 @@ function StudentForm({ db, userId, setView }) {
 
     setIsSubmitting(true);
     try {
-      const complaintsCollectionRef = collection(db, artifacts/${appId}/public/data/complaints);
+      const complaintsCollectionRef = collection(db, `artifacts/${appId}/public/data/complaints`);
       await addDoc(complaintsCollectionRef, {
         ...complaint,
         name: 'Anonymous User',
@@ -273,17 +273,17 @@ function StudentForm({ db, userId, setView }) {
       setIsSubmitting(false);
     }
   };
-  
+
   if (!db || !userId) {
     return (
-      <div className={${tailwind.container} max-w-lg text-center animate-fade-in}>
+      <div className={`${tailwind.container} max-w-lg text-center animate-fade-in`}>
         <LoadingSkeleton />
       </div>
     );
   }
 
   return (
-    <div className={${tailwind.container} max-w-lg animate-fade-in}>
+    <div className={`${tailwind.container} max-w-lg animate-fade-in`}>
       <button onClick={() => setView('chooseRole')} className={tailwind.backButton}>
         <ArrowLeft className="h-5 w-5" /> Go Back
       </button>
@@ -313,7 +313,7 @@ function StudentForm({ db, userId, setView }) {
             name="description"
             value={complaint.description}
             onChange={handleChange}
-            className={${tailwind.input} h-40 resize-none}
+            className={`${tailwind.input} h-40 resize-none`}
             placeholder="Describe your complaint here..."
             required
           />
@@ -346,11 +346,11 @@ function StudentDashboard({ db, userId, setView }) {
       setMessage("User not authenticated. Please submit a complaint first.");
       return;
     }
-    
+
     setLoading(true);
     try {
       // Use a Firestore query to get only complaints submitted by the current user
-      const complaintsCollectionRef = collection(db, artifacts/${appId}/public/data/complaints);
+      const complaintsCollectionRef = collection(db, `artifacts/${appId}/public/data/complaints`);
       const q = query(complaintsCollectionRef, where("submittedBy", "==", userId));
 
       const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -389,7 +389,7 @@ function StudentDashboard({ db, userId, setView }) {
   };
 
   return (
-    <div className={${tailwind.container} animate-fade-in}>
+    <div className={`${tailwind.container} animate-fade-in`}>
       <button onClick={() => setView('chooseRole')} className={tailwind.backButton}>
         <ArrowLeft className="h-5 w-5" /> Go Back
       </button>
@@ -411,7 +411,7 @@ function StudentDashboard({ db, userId, setView }) {
       ) : (
         <div className="grid gap-4">
           {complaints.map((c) => (
-            <div key={c.id} className={${tailwind.card} animate-slide-in-from-bottom}>
+            <div key={c.id} className={`${tailwind.card} animate-slide-in-from-bottom`}>
               <div className="flex justify-between items-start mb-2">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 rounded-full">
@@ -422,16 +422,16 @@ function StudentDashboard({ db, userId, setView }) {
                     <p className="text-sm text-slate-800 dark:text-slate-200 font-medium">Anonymous Submission</p>
                   </div>
                 </div>
-                <span className={px-3 py-1 rounded-full text-xs font-semibold uppercase ${c.status === 'pending' ? 'bg-amber-200 text-amber-800' : 'bg-teal-200 text-teal-800'}}>
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold uppercase ${c.status === 'pending' ? 'bg-amber-200 text-amber-800' : 'bg-teal-200 text-teal-800'}`}>
                   {c.status}
                 </span>
               </div>
               <p className="text-slate-800 dark:text-slate-200 mt-4 mb-4">{c.description}</p>
               {c.status === 'resolved' && c.resolutionNote && (
-                  <div className="mt-4 p-4 bg-slate-100 dark:bg-slate-700 rounded-lg border-l-4 border-teal-500">
-                    <p className="font-semibold text-teal-600 dark:text-teal-400">Resolution Note:</p>
-                    <p className="text-sm">{c.resolutionNote}</p>
-                  </div>
+                <div className="mt-4 p-4 bg-slate-100 dark:bg-slate-700 rounded-lg border-l-4 border-teal-500">
+                  <p className="font-semibold text-teal-600 dark:text-teal-400">Resolution Note:</p>
+                  <p className="text-sm">{c.resolutionNote}</p>
+                </div>
               )}
               <div className="flex justify-end items-center mt-4 text-xs text-slate-500 dark:text-slate-400">
                 <span>Submitted on: {new Date(c.createdAt).toLocaleString()}</span>
@@ -462,7 +462,7 @@ function HODLoginForm({ setIsHOD, setView }) {
   };
 
   return (
-    <div className={${tailwind.container} max-w-sm animate-fade-in}>
+    <div className={`${tailwind.container} max-w-sm animate-fade-in`}>
       <button onClick={() => setView('chooseRole')} className={tailwind.backButton}>
         <ArrowLeft className="h-5 w-5" /> Go Back
       </button>
@@ -492,7 +492,7 @@ function HODLoginForm({ setIsHOD, setView }) {
             required
           />
         </div>
-        <button type="submit" className={${tailwind.button} bg-teal-600 hover:bg-teal-700}>
+        <button type="submit" className={`${tailwind.button} bg-teal-600 hover:bg-teal-700`}>
           Login
         </button>
       </form>
@@ -521,7 +521,7 @@ function HODDashboard({ db }) {
     setLoading(true);
 
     try {
-      const complaintsCollectionRef = collection(db, artifacts/${appId}/public/data/complaints);
+      const complaintsCollectionRef = collection(db, `artifacts/${appId}/public/data/complaints`);
       const unsubscribe = onSnapshot(complaintsCollectionRef, (snapshot) => {
         const complaintsData = [];
         snapshot.forEach((doc) => {
@@ -564,12 +564,12 @@ function HODDashboard({ db }) {
     }
     setUpdatingId(complaintId);
     try {
-      const complaintDocRef = doc(db, artifacts/${appId}/public/data/complaints, complaintId);
+      const complaintDocRef = doc(db, `artifacts/${appId}/public/data/complaints`, complaintId);
       await updateDoc(complaintDocRef, {
         status: 'resolved',
         resolutionNote: resolutionNote || 'No notes provided.',
       });
-      setMessage(Complaint ID ${complaintId} has been resolved.);
+      setMessage(`Complaint ID ${complaintId} has been resolved.`);
       setResolutionNote('');
       setActiveNoteId(null);
     } catch (e) {
@@ -587,7 +587,7 @@ function HODDashboard({ db }) {
   });
 
   return (
-    <div className={${tailwind.container} animate-fade-in}>
+    <div className={`${tailwind.container} animate-fade-in`}>
       <h1 className={tailwind.heading}>HOD Dashboard</h1>
       <p className="text-center text-slate-600 dark:text-slate-400 mb-6 text-lg font-medium">
         Here are the complaints submitted to the portal.
@@ -634,7 +634,7 @@ function HODDashboard({ db }) {
       ) : (
         <div className="grid gap-4">
           {filteredComplaints.map((c) => (
-            <div key={c.id} className={${tailwind.card} animate-slide-in-from-bottom}>
+            <div key={c.id} className={`${tailwind.card} animate-slide-in-from-bottom`}>
               <div className="flex justify-between items-start mb-2">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 rounded-full">
@@ -646,16 +646,16 @@ function HODDashboard({ db }) {
                     <p className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-1">ID: {c.submittedBy}</p>
                   </div>
                 </div>
-                <span className={px-3 py-1 rounded-full text-xs font-semibold uppercase ${c.status === 'pending' ? 'bg-amber-200 text-amber-800' : 'bg-teal-200 text-teal-800'}}>
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold uppercase ${c.status === 'pending' ? 'bg-amber-200 text-amber-800' : 'bg-teal-200 text-teal-800'}`}>
                   {c.status}
                 </span>
               </div>
               <p className="text-slate-800 dark:text-slate-200 mt-4 mb-4">{c.description}</p>
               {c.status === 'resolved' && c.resolutionNote && (
-                  <div className="mt-4 p-4 bg-slate-100 dark:bg-slate-700 rounded-lg border-l-4 border-teal-500">
-                    <p className="font-semibold text-teal-600 dark:text-teal-400">Resolution Note:</p>
-                    <p className="text-sm">{c.resolutionNote}</p>
-                  </div>
+                <div className="mt-4 p-4 bg-slate-100 dark:bg-slate-700 rounded-lg border-l-4 border-teal-500">
+                  <p className="font-semibold text-teal-600 dark:text-teal-400">Resolution Note:</p>
+                  <p className="text-sm">{c.resolutionNote}</p>
+                </div>
               )}
               {c.status === 'pending' && (
                 <div className="mt-4">
@@ -666,7 +666,7 @@ function HODDashboard({ db }) {
                       setActiveNoteId(c.id);
                       setResolutionNote(e.target.value);
                     }}
-                    className={${tailwind.input} h-24}
+                    className={`${tailwind.input} h-24`}
                     placeholder="Add a note about the resolution..."
                   />
                   <div className="flex justify-end items-center mt-2">
@@ -704,7 +704,7 @@ function LoadingSkeleton() {
   return (
     <div className="animate-pulse space-y-4">
       {[...Array(3)].map((_, i) => (
-        <div key={i} className={${tailwind.card} h-40}>
+        <div key={i} className={`${tailwind.card} h-40`}>
           <div className="flex justify-between items-start mb-2">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 bg-slate-300 dark:bg-slate-700 rounded-full"></div>
@@ -735,7 +735,7 @@ function Modal({ isOpen, title, onClose, children, type }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 animate-fade-in">
-      <div className={relative w-full max-w-md p-8 rounded-2xl shadow-2xl transition transform scale-100 animate-slide-in-from-bottom ${modalClass}}>
+      <div className={`relative w-full max-w-md p-8 rounded-2xl shadow-2xl transition transform scale-100 animate-slide-in-from-bottom ${modalClass}`}>
         <h2 className="text-2xl font-bold mb-4">{title}</h2>
         <div className="text-lg">{children}</div>
         <button
@@ -747,6 +747,6 @@ function Modal({ isOpen, title, onClose, children, type }) {
           </svg>
         </button>
       </div>
-    </div>
-  );
+    </div>
+  );
 }
