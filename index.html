@@ -1,0 +1,752 @@
+import { useState, useEffect } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut } from 'firebase/auth';
+import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, query, where } from 'firebase/firestore';
+
+// Lucide-react for icons
+import { User, Wrench, Building, Sparkles, LogOut, CheckCircle2, CircleDashed, Sun, Moon, ArrowLeft, Building2, Eye } from 'lucide-react';
+
+// --- Firebase Initialization and Global Variables ---
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+const firebaseConfig = typeof _firebase_config !== 'undefined' ? JSON.parse(_firebase_config) : {};
+const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+// The HOD credentials are used for a simple authentication check.
+const HOD_CREDENTIALS = {
+  username: 'nethravathi',
+  password: 'admin@123'
+};
+
+// Tailwind CSS classes for consistent styling
+const tailwind = {
+  container: 'max-w-4xl mx-auto p-8 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-2xl rounded-3xl mt-10 transition-colors duration-300',
+  button: 'w-full px-6 py-3 mt-4 text-lg font-bold text-white bg-indigo-600 rounded-xl shadow-lg hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50 transform transition duration-300 hover:scale-105',
+  input: 'w-full px-5 py-3 mt-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors duration-300',
+  card: 'bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-md mb-4 transition-colors duration-300 border border-slate-200 dark:border-slate-700',
+  heading: 'text-4xl font-extrabold text-slate-900 dark:text-slate-100 mb-6 text-center tracking-tight',
+  label: 'block text-slate-700 dark:text-slate-300 font-semibold mb-2',
+  backButton: 'inline-flex items-center gap-2 text-slate-500 hover:text-indigo-500 transition-colors mb-6',
+};
+
+// --- App Component ---
+export default function App() {
+  const [db, setDb] = useState(null);
+  const [auth, setAuth] = useState(null);
+  const [userId, setUserId] = useState(null);
+  const [isHOD, setIsHOD] = useState(false);
+  const [view, setView] = useState('chooseRole'); // 'chooseRole', 'studentForm', 'studentDashboard', 'hodLogin', 'hodDashboard'
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+
+  useEffect(() => {
+    document.documentElement.className = theme === 'dark' ? 'dark' : '';
+  }, [theme]);
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+  };
+
+  useEffect(() => {
+    if (Object.keys(firebaseConfig).length === 0) {
+      console.error("Firebase config is missing.");
+      setError("Firebase configuration is not available. Please contact support.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const app = initializeApp(firebaseConfig);
+      const firestoreDb = getFirestore(app);
+      const firebaseAuth = getAuth(app);
+
+      setDb(firestoreDb);
+      setAuth(firebaseAuth);
+
+      const unsubscribe = onAuthStateChanged(firebaseAuth, (currentUser) => {
+        if (currentUser) {
+          setUserId(currentUser.uid);
+        } else {
+          setUserId(null);
+        }
+        setLoading(false);
+      });
+
+      const signIn = async () => {
+        try {
+          if (initialAuthToken) {
+            await signInWithCustomToken(firebaseAuth, initialAuthToken);
+          } else {
+            await signInAnonymously(firebaseAuth);
+          }
+        } catch (authError) {
+          console.error("Firebase Auth Error:", authError);
+          setError("Failed to authenticate. Please try again later.");
+          setLoading(false);
+        }
+      };
+      
+      signIn();
+      return () => unsubscribe();
+    } catch (initError) {
+      console.error("Firebase Initialization Error:", initError);
+      setError("Failed to initialize Firebase. Please try again.");
+      setLoading(false);
+    }
+  }, []);
+
+  const handleLogout = async () => {
+    if (auth) {
+      try {
+        await signOut(auth);
+        setIsHOD(false);
+        setView('chooseRole');
+      } catch (error) {
+        console.error("Error signing out:", error);
+      }
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-100 dark:bg-slate-900 transition-colors duration-300">
+        <div className="text-slate-900 dark:text-slate-100">Loading application...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-100 dark:bg-slate-900 transition-colors duration-300">
+        <div className="bg-red-100 text-red-700 p-4 rounded-lg shadow-md">
+          <p>{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const renderContent = () => {
+    switch(view) {
+      case 'chooseRole':
+        return <ChooseRole setView={setView} />;
+      case 'studentForm':
+        return <StudentForm db={db} userId={userId} setView={setView} />;
+      case 'studentDashboard':
+        return <StudentDashboard db={db} userId={userId} setView={setView} />;
+      case 'hodLogin':
+        return <HODLoginForm setIsHOD={setIsHOD} setView={setView} />;
+      case 'hodDashboard':
+        return <HODDashboard db={db} />;
+      default:
+        return <ChooseRole setView={setView} />;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-900 transition-colors duration-300 font-sans">
+      <Header toggleTheme={toggleTheme} theme={theme} onLogout={handleLogout} showLogout={isHOD} />
+      <main className="pb-10">
+        {renderContent()}
+      </main>
+    </div>
+  );
+}
+
+// --- Header Component ---
+function Header({ toggleTheme, theme, onLogout, showLogout }) {
+  return (
+    <header className="py-4 px-8 flex justify-between items-center bg-white dark:bg-slate-800 shadow-sm transition-colors duration-300 sticky top-0 z-10">
+      <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-2">
+        <Building2 className="h-6 w-6" /> Complaint Portal
+      </h1>
+      <div className="flex items-center space-x-4">
+        {showLogout && (
+          <button
+            onClick={onLogout}
+            className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg shadow-md hover:bg-red-700 focus:outline-none transition-colors flex items-center gap-2"
+          >
+            <LogOut className="h-4 w-4" /> Logout
+          </button>
+        )}
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-full text-slate-500 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors duration-300"
+        >
+          {theme === 'light' ? <Moon className="h-6 w-6" /> : <Sun className="h-6 w-6" />}
+        </button>
+      </div>
+    </header>
+  );
+}
+
+// --- Choose Role Component ---
+function ChooseRole({ setView }) {
+  return (
+    <div className={${tailwind.container} max-w-lg text-center animate-fade-in}>
+      <h1 className={tailwind.heading}>Welcome</h1>
+      <p className="text-slate-600 dark:text-slate-400 mb-8 text-lg">Please select your role to proceed.</p>
+      <div className="flex flex-col md:flex-row gap-6">
+        <button
+          onClick={() => setView('studentForm')}
+          className={${tailwind.button} bg-indigo-600 hover:bg-indigo-700 md:w-1/2 shadow-xl}
+        >
+          Submit a Complaint
+        </button>
+        <button
+          onClick={() => setView('studentDashboard')}
+          className={${tailwind.button} bg-purple-600 hover:bg-purple-700 md:w-1/2 shadow-xl}
+        >
+          Track My Complaints
+        </button>
+      </div>
+      <div className="mt-8 flex justify-center">
+        <button
+          onClick={() => setView('hodLogin')}
+          className="w-full md:w-1/2 px-6 py-3 text-lg font-bold text-white bg-teal-600 rounded-xl shadow-lg hover:bg-teal-700 focus:outline-none focus:ring-4 focus:ring-teal-500 focus:ring-opacity-50 transform transition duration-300 hover:scale-105"
+        >
+          I am an HOD
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// --- Student Form Component (Anonymous) ---
+function StudentForm({ db, userId, setView }) {
+  const [complaint, setComplaint] = useState({
+    type: 'Student',
+    description: '',
+  });
+  const [modalState, setModalState] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: '',
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const complaintTypes = ['Student', 'Staff', 'Classroom Maintenance', 'Others'];
+
+  const handleChange = (e) => {
+    setComplaint({ ...complaint, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!complaint.description) {
+      setModalState({
+        isOpen: true,
+        title: 'Validation Error',
+        message: 'Please fill in the complaint description.',
+        type: 'error',
+      });
+      return;
+    }
+
+    if (!db || !userId) {
+      console.error("Firestore DB or User ID is not initialized.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const complaintsCollectionRef = collection(db, artifacts/${appId}/public/data/complaints);
+      await addDoc(complaintsCollectionRef, {
+        ...complaint,
+        name: 'Anonymous User',
+        submittedBy: userId, // Save the user ID for tracking
+        createdAt: new Date().toISOString(),
+        status: 'pending',
+      });
+      setView('studentDashboard'); // Redirect to dashboard after submission
+    } catch (e) {
+      console.error("Error adding document: ", e);
+      setModalState({
+        isOpen: true,
+        title: 'Submission Failed',
+        message: 'Failed to submit complaint. Please try again.',
+        type: 'error',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
+  if (!db || !userId) {
+    return (
+      <div className={${tailwind.container} max-w-lg text-center animate-fade-in}>
+        <LoadingSkeleton />
+      </div>
+    );
+  }
+
+  return (
+    <div className={${tailwind.container} max-w-lg animate-fade-in}>
+      <button onClick={() => setView('chooseRole')} className={tailwind.backButton}>
+        <ArrowLeft className="h-5 w-5" /> Go Back
+      </button>
+      <h1 className={tailwind.heading}>Submit an Anonymous Complaint</h1>
+      <p className="text-center text-slate-600 dark:text-slate-400 mb-6">
+        Your name and identity will not be saved with this complaint, but your device will be linked to it for tracking.
+      </p>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div>
+          <label className={tailwind.label}>Report Category</label>
+          <select
+            name="type"
+            value={complaint.type}
+            onChange={handleChange}
+            className={tailwind.input}
+          >
+            {complaintTypes.map((type) => (
+              <option key={type} value={type}>{type}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={tailwind.label}>
+            Complaint Description
+          </label>
+          <textarea
+            name="description"
+            value={complaint.description}
+            onChange={handleChange}
+            className={${tailwind.input} h-40 resize-none}
+            placeholder="Describe your complaint here..."
+            required
+          />
+        </div>
+        <button type="submit" className={tailwind.button} disabled={isSubmitting}>
+          {isSubmitting ? 'Submitting...' : 'Submit Complaint'}
+        </button>
+      </form>
+      <Modal
+        isOpen={modalState.isOpen}
+        title={modalState.title}
+        onClose={() => setModalState({ ...modalState, isOpen: false })}
+        type={modalState.type}
+      >
+        <p>{modalState.message}</p>
+      </Modal>
+    </div>
+  );
+}
+
+// --- Student Dashboard Component ---
+function StudentDashboard({ db, userId, setView }) {
+  const [complaints, setComplaints] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    if (!db || !userId) {
+      setLoading(false);
+      setMessage("User not authenticated. Please submit a complaint first.");
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      // Use a Firestore query to get only complaints submitted by the current user
+      const complaintsCollectionRef = collection(db, artifacts/${appId}/public/data/complaints);
+      const q = query(complaintsCollectionRef, where("submittedBy", "==", userId));
+
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const myComplaints = [];
+        snapshot.forEach((doc) => {
+          myComplaints.push({ id: doc.id, ...doc.data() });
+        });
+        myComplaints.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        setComplaints(myComplaints);
+        setLoading(false);
+      }, (error) => {
+        console.error("Error fetching complaints:", error);
+        setMessage("Failed to load complaints. Please try again.");
+        setLoading(false);
+      });
+
+      return () => unsubscribe();
+    } catch (e) {
+      console.error("Firestore operation failed:", e);
+      setMessage("An error occurred while setting up the dashboard.");
+      setLoading(false);
+    }
+  }, [db, userId]);
+
+  const getComplaintIcon = (type) => {
+    switch (type) {
+      case 'Student':
+        return <User className="h-5 w-5" />;
+      case 'Staff':
+        return <Building className="h-5 w-5" />;
+      case 'Classroom Maintenance':
+        return <Wrench className="h-5 w-5" />;
+      default:
+        return <Sparkles className="h-5 w-5" />;
+    }
+  };
+
+  return (
+    <div className={${tailwind.container} animate-fade-in}>
+      <button onClick={() => setView('chooseRole')} className={tailwind.backButton}>
+        <ArrowLeft className="h-5 w-5" /> Go Back
+      </button>
+      <h1 className={tailwind.heading}>My Complaints</h1>
+      <p className="text-center text-slate-600 dark:text-slate-400 mb-6 text-lg font-medium">
+        Here are the complaints you've submitted. Your unique ID is: <code className="text-sm bg-slate-200 dark:bg-slate-700 p-1 rounded font-mono">{userId}</code>
+      </p>
+      {message && (
+        <div className="mt-4 p-4 text-center text-sm font-medium text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-800 rounded-lg">
+          {message}
+        </div>
+      )}
+      {loading ? (
+        <LoadingSkeleton />
+      ) : complaints.length === 0 ? (
+        <div className="text-center text-slate-500 dark:text-slate-400 mt-8 p-6 bg-slate-100 dark:bg-slate-800 rounded-xl">
+          You have not submitted any complaints yet.
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          {complaints.map((c) => (
+            <div key={c.id} className={${tailwind.card} animate-slide-in-from-bottom}>
+              <div className="flex justify-between items-start mb-2">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 rounded-full">
+                    {getComplaintIcon(c.type)}
+                  </div>
+                  <div>
+                    <span className="font-bold text-lg text-indigo-600 dark:text-indigo-400">{c.type}</span>
+                    <p className="text-sm text-slate-800 dark:text-slate-200 font-medium">Anonymous Submission</p>
+                  </div>
+                </div>
+                <span className={px-3 py-1 rounded-full text-xs font-semibold uppercase ${c.status === 'pending' ? 'bg-amber-200 text-amber-800' : 'bg-teal-200 text-teal-800'}}>
+                  {c.status}
+                </span>
+              </div>
+              <p className="text-slate-800 dark:text-slate-200 mt-4 mb-4">{c.description}</p>
+              {c.status === 'resolved' && c.resolutionNote && (
+                  <div className="mt-4 p-4 bg-slate-100 dark:bg-slate-700 rounded-lg border-l-4 border-teal-500">
+                    <p className="font-semibold text-teal-600 dark:text-teal-400">Resolution Note:</p>
+                    <p className="text-sm">{c.resolutionNote}</p>
+                  </div>
+              )}
+              <div className="flex justify-end items-center mt-4 text-xs text-slate-500 dark:text-slate-400">
+                <span>Submitted on: {new Date(c.createdAt).toLocaleString()}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// --- HOD Login Form Component ---
+function HODLoginForm({ setIsHOD, setView }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (username === HOD_CREDENTIALS.username && password === HOD_CREDENTIALS.password) {
+      setIsHOD(true);
+      setView('hodDashboard');
+    } else {
+      setError('Invalid username or password.');
+    }
+  };
+
+  return (
+    <div className={${tailwind.container} max-w-sm animate-fade-in}>
+      <button onClick={() => setView('chooseRole')} className={tailwind.backButton}>
+        <ArrowLeft className="h-5 w-5" /> Go Back
+      </button>
+      <h1 className={tailwind.heading}>HOD Login</h1>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div>
+          <label className={tailwind.label}>Username</label>
+          <input
+            type="text"
+            name="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className={tailwind.input}
+            placeholder="Username"
+            required
+          />
+        </div>
+        <div>
+          <label className={tailwind.label}>Password</label>
+          <input
+            type="password"
+            name="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className={tailwind.input}
+            placeholder="Password"
+            required
+          />
+        </div>
+        <button type="submit" className={${tailwind.button} bg-teal-600 hover:bg-teal-700}>
+          Login
+        </button>
+      </form>
+      {error && (
+        <div className="mt-4 p-4 text-center text-sm font-medium text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-800 rounded-lg">
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- HOD Dashboard Component ---
+function HODDashboard({ db }) {
+  const [complaints, setComplaints] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
+  const [updatingId, setUpdatingId] = useState(null);
+  const [resolutionNote, setResolutionNote] = useState('');
+  const [activeNoteId, setActiveNoteId] = useState(null);
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterType, setFilterType] = useState('all');
+
+  useEffect(() => {
+    if (!db) return;
+    setLoading(true);
+
+    try {
+      const complaintsCollectionRef = collection(db, artifacts/${appId}/public/data/complaints);
+      const unsubscribe = onSnapshot(complaintsCollectionRef, (snapshot) => {
+        const complaintsData = [];
+        snapshot.forEach((doc) => {
+          complaintsData.push({ id: doc.id, ...doc.data() });
+        });
+        complaintsData.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        setComplaints(complaintsData);
+        setLoading(false);
+      }, (error) => {
+        console.error("Error fetching complaints:", error);
+        setMessage("Failed to load complaints. Please try again.");
+        setLoading(false);
+      });
+
+      return () => unsubscribe();
+    } catch (e) {
+      console.error("Firestore operation failed:", e);
+      setMessage("An error occurred while setting up the dashboard.");
+      setLoading(false);
+    }
+  }, [db]);
+
+  const getComplaintIcon = (type) => {
+    switch (type) {
+      case 'Student':
+        return <User className="h-5 w-5" />;
+      case 'Staff':
+        return <Building className="h-5 w-5" />;
+      case 'Classroom Maintenance':
+        return <Wrench className="h-5 w-5" />;
+      default:
+        return <Sparkles className="h-5 w-5" />;
+    }
+  };
+
+  const handleMarkAsResolved = async (complaintId) => {
+    if (!db) {
+      setMessage("Firestore is not ready. Please wait.");
+      return;
+    }
+    setUpdatingId(complaintId);
+    try {
+      const complaintDocRef = doc(db, artifacts/${appId}/public/data/complaints, complaintId);
+      await updateDoc(complaintDocRef, {
+        status: 'resolved',
+        resolutionNote: resolutionNote || 'No notes provided.',
+      });
+      setMessage(Complaint ID ${complaintId} has been resolved.);
+      setResolutionNote('');
+      setActiveNoteId(null);
+    } catch (e) {
+      console.error("Error updating document:", e);
+      setMessage("Failed to update complaint status.");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const filteredComplaints = complaints.filter(c => {
+    const statusMatch = filterStatus === 'all' || c.status === filterStatus;
+    const typeMatch = filterType === 'all' || c.type === filterType;
+    return statusMatch && typeMatch;
+  });
+
+  return (
+    <div className={${tailwind.container} animate-fade-in}>
+      <h1 className={tailwind.heading}>HOD Dashboard</h1>
+      <p className="text-center text-slate-600 dark:text-slate-400 mb-6 text-lg font-medium">
+        Here are the complaints submitted to the portal.
+      </p>
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center space-x-4">
+          <div className="relative">
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-4 py-2 text-sm bg-white dark:bg-slate-800 border rounded-lg shadow-sm"
+            >
+              <option value="all">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="resolved">Resolved</option>
+            </select>
+          </div>
+          <div className="relative">
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="px-4 py-2 text-sm bg-white dark:bg-slate-800 border rounded-lg shadow-sm"
+            >
+              <option value="all">All Report Categories</option>
+              <option value="Student">Student</option>
+              <option value="Staff">Staff</option>
+              <option value="Classroom Maintenance">Maintenance</option>
+              <option value="Others">Others</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      {message && (
+        <div className="mt-4 p-4 text-center text-sm font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-800 rounded-lg">
+          {message}
+        </div>
+      )}
+      {loading ? (
+        <LoadingSkeleton />
+      ) : filteredComplaints.length === 0 ? (
+        <div className="text-center text-slate-500 dark:text-slate-400 mt-8 p-6 bg-slate-100 dark:bg-slate-800 rounded-xl">
+          No complaints match the current filters.
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          {filteredComplaints.map((c) => (
+            <div key={c.id} className={${tailwind.card} animate-slide-in-from-bottom}>
+              <div className="flex justify-between items-start mb-2">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 rounded-full">
+                    {getComplaintIcon(c.type)}
+                  </div>
+                  <div>
+                    <span className="font-bold text-lg text-indigo-600 dark:text-indigo-400">{c.type}</span>
+                    <p className="text-sm text-slate-800 dark:text-slate-200 font-medium">Anonymous User</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-1">ID: {c.submittedBy}</p>
+                  </div>
+                </div>
+                <span className={px-3 py-1 rounded-full text-xs font-semibold uppercase ${c.status === 'pending' ? 'bg-amber-200 text-amber-800' : 'bg-teal-200 text-teal-800'}}>
+                  {c.status}
+                </span>
+              </div>
+              <p className="text-slate-800 dark:text-slate-200 mt-4 mb-4">{c.description}</p>
+              {c.status === 'resolved' && c.resolutionNote && (
+                  <div className="mt-4 p-4 bg-slate-100 dark:bg-slate-700 rounded-lg border-l-4 border-teal-500">
+                    <p className="font-semibold text-teal-600 dark:text-teal-400">Resolution Note:</p>
+                    <p className="text-sm">{c.resolutionNote}</p>
+                  </div>
+              )}
+              {c.status === 'pending' && (
+                <div className="mt-4">
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-2">Resolution Note (optional)</label>
+                  <textarea
+                    value={activeNoteId === c.id ? resolutionNote : ''}
+                    onChange={(e) => {
+                      setActiveNoteId(c.id);
+                      setResolutionNote(e.target.value);
+                    }}
+                    className={${tailwind.input} h-24}
+                    placeholder="Add a note about the resolution..."
+                  />
+                  <div className="flex justify-end items-center mt-2">
+                    <button
+                      onClick={() => handleMarkAsResolved(c.id)}
+                      className="px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-colors flex items-center gap-2"
+                      disabled={updatingId === c.id}
+                    >
+                      {updatingId === c.id ? (
+                        <>
+                          <CircleDashed className="animate-spin h-4 w-4" /> Updating...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-4 w-4" /> Mark as Resolved
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="flex justify-end items-center mt-4 text-xs text-slate-500 dark:text-slate-400">
+                <span>Submitted on: {new Date(c.createdAt).toLocaleString()}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Loading Skeleton Component ---
+function LoadingSkeleton() {
+  return (
+    <div className="animate-pulse space-y-4">
+      {[...Array(3)].map((_, i) => (
+        <div key={i} className={${tailwind.card} h-40}>
+          <div className="flex justify-between items-start mb-2">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 bg-slate-300 dark:bg-slate-700 rounded-full"></div>
+              <div>
+                <div className="h-4 bg-slate-300 dark:bg-slate-700 rounded w-24 mb-2"></div>
+                <div className="h-3 bg-slate-300 dark:bg-slate-700 rounded w-32"></div>
+              </div>
+            </div>
+            <div className="h-5 bg-slate-300 dark:bg-slate-700 rounded-full w-20"></div>
+          </div>
+          <div className="h-4 bg-slate-300 dark:bg-slate-700 rounded mt-4"></div>
+          <div className="h-4 bg-slate-300 dark:bg-slate-700 rounded mt-2"></div>
+          <div className="h-4 bg-slate-300 dark:bg-slate-700 rounded w-1/2 mt-2"></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// --- Reusable Modal Component ---
+function Modal({ isOpen, title, onClose, children, type }) {
+  if (!isOpen) return null;
+
+  const modalClass = {
+    success: 'bg-green-100 border-green-300 text-green-800 dark:bg-green-900 dark:text-green-200',
+    error: 'bg-red-100 border-red-300 text-red-800 dark:bg-red-900 dark:text-red-200',
+  }[type] || 'bg-slate-100 border-slate-300 text-slate-800 dark:bg-slate-800 dark:text-slate-200';
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 animate-fade-in">
+      <div className={relative w-full max-w-md p-8 rounded-2xl shadow-2xl transition transform scale-100 animate-slide-in-from-bottom ${modalClass}}>
+        <h2 className="text-2xl font-bold mb-4">{title}</h2>
+        <div className="text-lg">{children}</div>
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
